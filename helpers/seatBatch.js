@@ -191,7 +191,7 @@ function CreateInventoryAndLine(data,offer,event,descriptions)
   const repeatExtraCharges = parseFloat(otherCharges.reduce((total, item) => total + (item?.amount || 0), 0));
 
   const faceValue = offer?.faceValue || 0;
-  const hiddenFees = parseHiddenFees(offer?.name);
+  const hiddenFees = parseHiddenFees(offer?.name) || parseHiddenFees(offer?.description);
   const totalCost = singleExtraCharges + repeatExtraCharges + faceValue + hiddenFees;
   const listCostPercentage = event?.listCostPercentage || 0;
   const totalCostWithPercentage = totalCost + (totalCost * (listCostPercentage / 100));
