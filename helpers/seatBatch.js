@@ -118,6 +118,13 @@ function getSplitType(arr,offer){
   
   
 }
+function parseHiddenFees(offerName) {
+  if (!offerName) return 0;
+  const matches = offerName.match(/\$(\d+(?:\.\d{1,2})?)/g);
+  if (!matches) return 0;
+  return matches.reduce((sum, match) => sum + parseFloat(match.replace('$', '')), 0);
+}
+
 function CreateInventoryAndLine(data,offer,event,descriptions)
 {
     
@@ -184,7 +191,8 @@ function CreateInventoryAndLine(data,offer,event,descriptions)
   const repeatExtraCharges = parseFloat(otherCharges.reduce((total, item) => total + (item?.amount || 0), 0));
 
   const faceValue = offer?.faceValue || 0;
-  const totalCost = singleExtraCharges + repeatExtraCharges + faceValue;
+  const hiddenFees = parseHiddenFees(offer?.name);
+  const totalCost = singleExtraCharges + repeatExtraCharges + faceValue + hiddenFees;
   const listCostPercentage = event?.listCostPercentage || 0;
   const totalCostWithPercentage = totalCost + (totalCost * (listCostPercentage / 100));
   return {
