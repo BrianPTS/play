@@ -172,51 +172,78 @@ function CreateInventoryAndLine(data,offer,event,descriptions)
     });
   }
 
-  /*
-  let totalCost=parseFloat(offer?.charges.reduce((total, item) => total + item.amount, 0)+offer?.faceValue);
-  let totalCostWithPercentage=totalCost+(totalCost*(event?.listCostPercentage/100));
-  */
- //Get Fee which won't multiply
- const orderProcessingCharges = offer?.charges?.filter(x => x?.reason === "order_processing") || [];
-  const singleExtraCharges = parseFloat(orderProcessingCharges.reduce((total, item) => total + (item?.amount || 0), 0) / (data?.seats?.length || 1));
-
-  const otherCharges = offer?.charges?.filter(x => x?.reason !== "order_processing") || [];
-  const repeatExtraCharges = parseFloat(otherCharges.reduce((total, item) => total + (item?.amount || 0), 0));
-
+  // --- PRICING: Use API's totalPrice as the absolute source of truth ---
+  // totalPrice from API already includes ALL fees (service, facility, order processing, tax, etc.)
+  // This is what the buyer actually pays per ticket - no manual calculation needed.
+  // If totalPrice is missing, fall back to manual sum for backward compatibility.
   const faceValue = offer?.faceValue || 0;
-  const totalCost = singleExtraCharges + repeatExtraCharges + faceValue;
+  const noChargesPrice = offer?.noChargesPrice || faceValue;
+  const charges = offer?.charges || [];
+
+  // Extract individual fee components (for analysis/storage, NOT for total calculation)
+  const serviceFee = charges.filter(c => c?.reason === "service").reduce((sum, c) => sum + (c?.amount || 0), 0);
+  const facilityFee = charges.filter(c => c?.reason === "facility").reduce((sum, c) => sum + (c?.amount || 0), 0);
+  const orderProcessingFee = charges.filter(c => c?.reason === "order_processing").reduce((sum, c) => sum + (c?.amount || 0), 0);
+  const taxAmount = charges.filter(c => c?.reason === "face_value_tax").reduce((sum, c) => sum + (c?.amount || 0), 0);
+
+  // Per-ticket cost: use totalPrice from API (absolute source of truth)
+  // Fallback: if API doesn't have totalPrice, calculate from charges manually
+  let perTicketCost;
+  if (offer?.totalPrice && offer.totalPrice > 0) {
+    perTicketCost = offer.totalPrice;
+  } else {
+    // Fallback: order_processing is per-order (split across seats), other charges are per-ticket
+    const orderProcessingPerSeat = orderProcessingFee / (data?.seats?.length || 1);
+    const otherChargesTotal = charges.filter(c => c?.reason !== "order_processing").reduce((sum, c) => sum + (c?.amount || 0), 0);
+    perTicketCost = faceValue + otherChargesTotal + orderProcessingPerSeat;
+  }
+
+  // Total fees = everything above face value (catches ALL fee types, even future unknown ones)
+  const totalFees = perTicketCost - faceValue;
+
   const listCostPercentage = event?.listCostPercentage || 0;
-  const totalCostWithPercentage = totalCost + (totalCost * (listCostPercentage / 100));
+  const perTicketWithMarkup = perTicketCost + (perTicketCost * (listCostPercentage / 100));
+
   return {
       "inventory": {
       "quantity": data?.seats?.length || 0,
       "section": data?.section || "",
       "hideSeatNumbers": true,
       "row": data?.row || "",
-      "cost": totalCost * (data?.seats?.length || 0),
+      "cost": perTicketCost * (data?.seats?.length || 0),
       "seats": data?.seats || [],
       "eventId": event?.eventMappingId,
         "stockType": "MOBILE_TRANSFER",
         "lineType": "PURCHASE",
         "seatType": "CONSECUTIVE",
-        "inHandDate": moment(event?.inHandDate).format("YYYY-MM-DDTHH:mm:ss"), //"2023-06-09T16:48:09.99",
-        // "notes": "+stub +geek +tnet +vivid +tevo +pick",
+        "inHandDate": moment(event?.inHandDate).format("YYYY-MM-DDTHH:mm:ss"),
         "notes": "-tnow -tmplus -stub",
         "tags": "AWS",
         "inventoryId": 0,
         "offerId": data?.offerId,
         "splitType":"CUSTOM",
         "publicNotes": "xfer"+allDescriptions,
-        "listPrice":totalCostWithPercentage,
+        "listPrice": perTicketWithMarkup,
         "customSplit":getSplitType(data?.seats,offer),
+        // Fee breakdown fields
+        "face_price": faceValue,
+        "totalPrice": perTicketCost,
+        "noChargesPrice": noChargesPrice,
+        "serviceFee": serviceFee,
+        "facilityFee": facilityFee,
+        "orderProcessingFee": orderProcessingFee,
+        "taxAmount": taxAmount,
+        "totalFees": totalFees,
+        "offerName": offer?.name || "",
+        "inventoryType": offer?.inventoryType || "",
          "tickets":data?.seats.map(y=>{return {
                 "id": 0,
                 "seatNumber":y,
                 "notes": "string",
-                "cost": totalCost,
-                "faceValue": totalCost,
-                "taxedCost": totalCost,
-                "sellPrice": totalCostWithPercentage,
+                "cost": perTicketCost,
+                "faceValue": faceValue,
+                "taxedCost": perTicketCost,
+                "sellPrice": perTicketWithMarkup,
                 "stockType": "HARD",
                 "eventId": 0,
                 "accountId": 0,
