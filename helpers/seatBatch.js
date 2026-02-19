@@ -6,16 +6,19 @@ function GetMapSeats(data) {
     data.pages[0].segments.map(composit => {
       if(composit?.segments)
       {
+        const isUpperLevel = composit?.name?.toLowerCase().includes("upper");
         composit.segments.map(SECTION => {
 
           if (SECTION.segments && SECTION.segments.length > 0)
-            SECTION.segments.map(ROW => {
+            SECTION.segments.map((ROW, rowIndex) => {
               ROW.placesNoKeys.map(seat => {
                 seatArray.push({
                   section: SECTION?.name,
                   row: ROW?.name,
                   seat: seat[1],
-                  seatId: seat[0]
+                  seatId: seat[0],
+                  rowIndex,
+                  isUpperLevel: !!isUpperLevel
                 })
               })
             })
@@ -25,7 +28,7 @@ function GetMapSeats(data) {
           }
         })
       }
-     
+
 
     })
   }
@@ -75,7 +78,9 @@ data.forEach((item) => {
       offerId: item.offerId,
       accessibility:item?.accessibility,
       descriptionId:item?.descriptionId,
-      attributes:item?.attributes
+      attributes:item?.attributes,
+      rowIndex: item.rowIndex,
+      isUpperLevel: item.isUpperLevel
     });
   }
 });
@@ -193,7 +198,10 @@ function CreateInventoryAndLine(data,offer,event,descriptions)
   const faceValue = offer?.faceValue || 0;
   const hiddenFees = parseHiddenFees(offer?.name) || parseHiddenFees(offer?.description);
   const totalCost = singleExtraCharges + repeatExtraCharges + faceValue + hiddenFees;
-  const listCostPercentage = event?.listCostPercentage || 0;
+  const basePercentage = event?.listCostPercentage || 0;
+  const firstRowPercentage = event?.firstRowListCostPercentage || 0;
+  const isFirstRowEligible = data.rowIndex === 0 && !data.isUpperLevel && firstRowPercentage > 0;
+  const listCostPercentage = isFirstRowEligible ? (basePercentage + firstRowPercentage) : basePercentage;
   const totalCostWithPercentage = totalCost + (totalCost * (listCostPercentage / 100));
   return {
       "inventory": {
@@ -311,7 +319,9 @@ export const AttachRowSection = (data, mapData, offers, event,descriptions) => {
           offerId: seatGroup.offerId,
           accessibility: seatGroup.accessibility,
           descriptionId: seatGroup.descriptionId,
-          attributes: seatGroup.attributes
+          attributes: seatGroup.attributes,
+          rowIndex: seatsInRow[0]?.rowIndex,
+          isUpperLevel: seatsInRow[0]?.isUpperLevel
         });
       });
     });
@@ -336,14 +346,15 @@ export const AttachRowSection = (data, mapData, offers, event,descriptions) => {
   //break seats if it is not consicutive ex [1,2,3,6,7] => [1,2,3],[6,7]
   .map(x=>{
     let breakOBJ=breakArray(x.seats)
- 
+
      if(breakOBJ.length>1)
      {
          breakOBJ.map(y=>{
           returnData.push({
                  ...x,
-                 seats:y
-                 
+                 seats:y,
+                 rowIndex: x.rowIndex,
+                 isUpperLevel: x.isUpperLevel
              })
          })
      }
