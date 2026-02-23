@@ -232,10 +232,40 @@ class ScraperManager {
   }
 }
 
-// Example usage:
-const events = [
-  "0A00614FC8B22987",
+// ScrapingManager - used by the Express API (app.js)
+class ScrapingManager {
+  constructor() {
+    this.activeJobs = new Map();
+  }
 
-];
-const manager = new ScraperManager(events);
-manager.start();
+  async startScraping(url) {
+    if (this.activeJobs.has(url)) {
+      return { status: "already_running", url };
+    }
+    this.activeJobs.set(url, { status: "running", startedAt: new Date() });
+    return { status: "started", url };
+  }
+
+  async stopScraping(url) {
+    if (!this.activeJobs.has(url)) {
+      throw new Error(`No active scraping job for URL: ${url}`);
+    }
+    this.activeJobs.delete(url);
+    return { status: "stopped", url };
+  }
+
+  async getStatus(url) {
+    if (url) {
+      const job = this.activeJobs.get(url);
+      if (!job) throw new Error(`No active scraping job for URL: ${url}`);
+      return { url, ...job };
+    }
+    const jobs = [];
+    for (const [jobUrl, jobData] of this.activeJobs) {
+      jobs.push({ url: jobUrl, ...jobData });
+    }
+    return { activeJobs: jobs, totalJobs: jobs.length };
+  }
+}
+
+export { ScrapingManager, ScraperManager };

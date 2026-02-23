@@ -6,6 +6,7 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import cors from "cors";
 import fs from "fs";
+import "./models/index.js";
 
 dotenv.config();
 
